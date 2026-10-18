@@ -25,7 +25,7 @@ npm run build   # type-check and write site/app.js
 
 ## Layout
 
-- `src/core/` — no DOM, shared with a future Obsidian plugin
+- `src/core/` — no DOM, shared with the Obsidian plugin (obsidian-pgn-speak copies it with `npm run sync-core`)
   - `pgn.ts` reads PGN (tags, comments, NAGs, nested variations, several games)
   - `game.ts` replays it with chess.js (legality, positions, better lines)
   - `speech.ts` turns one SAN move into words

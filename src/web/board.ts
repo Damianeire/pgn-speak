@@ -28,8 +28,9 @@ export function renderBoard(el: HTMLElement, fen: string, flipped: boolean, last
 			if (piece) {
 				const p = document.createElement("span");
 				p.className = `piece ${piece === piece.toUpperCase() ? "white" : "black"}`;
-				// Use the solid glyph for both colours and colour it with CSS.
-				p.textContent = GLYPHS[piece.toLowerCase()];
+				// Use the solid glyph for both colours and colour it with CSS. U+FE0E asks for
+				// the text form: Apple shows ♟ as an emoji otherwise, which ignores the colour.
+				p.textContent = GLYPHS[piece.toLowerCase()] + "\uFE0E";
 				cell.append(p);
 			}
 			cell.setAttribute("aria-label", piece ? `${name} ${pieceName(piece)}` : name);

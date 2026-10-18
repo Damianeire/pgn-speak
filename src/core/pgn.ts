@@ -29,7 +29,7 @@ const SUFFIX_NAGS: Record<string, number> = {
 
 export function parsePgn(text: string): PgnGame[] {
 	const games: PgnGame[] = [];
-	const src = text.replace(/^﻿/, "").replace(/\r\n?/g, "\n");
+	const src = text.replace(/^\uFEFF/, "").replace(/\r\n?/g, "\n");
 
 	let game = newGame();
 	// Stack of lines; the top is the line moves are currently added to.

@@ -107,7 +107,9 @@ button:disabled { opacity: 0.45; cursor: default; }
 
 .board {
 	display: grid;
+	/* Rows too, or rows without pieces come out shorter. */
 	grid-template-columns: repeat(8, 1fr);
+	grid-template-rows: repeat(8, 1fr);
 	width: min(100%, 360px);
 	aspect-ratio: 1;
 	margin: 16px auto 0;
@@ -115,7 +117,7 @@ button:disabled { opacity: 0.45; cursor: default; }
 	border-radius: 4px;
 	overflow: hidden;
 }
-.sq { display: grid; place-items: center; position: relative; }
+.sq { display: grid; place-items: center; position: relative; min-width: 0; min-height: 0; }
 .sq.light { background: var(--sq-light); }
 .sq.dark { background: var(--sq-dark); }
 .sq.last::after { content: ""; position: absolute; inset: 0; background: var(--sq-last); }

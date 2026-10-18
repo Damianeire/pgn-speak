@@ -17,7 +17,7 @@ export class Player {
 	private index = 0;
 	private state: PlayerState = "stopped";
 	private run = 0;
-	private timer: ReturnType<typeof setTimeout> | undefined;
+	private timer: number | undefined;
 	// Chrome can drop events for utterances that get garbage-collected mid-speech.
 	private utterance: SpeechSynthesisUtterance | null = null;
 
@@ -147,7 +147,7 @@ export class Player {
 				this.setState("waiting");
 				return;
 			}
-			this.timer = setTimeout(() => {
+			this.timer = window.setTimeout(() => {
 				if (run === this.run) this.speakFrom(index + 1);
 			}, cue.pauseAfterMs);
 		};
@@ -163,7 +163,7 @@ export class Player {
 	/** Cancel speech and timers; invalidates callbacks from the old run. */
 	private halt() {
 		this.run++;
-		clearTimeout(this.timer);
+		window.clearTimeout(this.timer);
 		this.utterance = null;
 		speechSynthesis.cancel();
 	}
