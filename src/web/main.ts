@@ -1,8 +1,11 @@
 import { parsePgn, type PgnGame } from "../core/pgn.ts";
 import { replay, type Game } from "../core/game.ts";
 import { buildScript, playerName, qualityOf, type Cue } from "../core/script.ts";
+import { KOKORO_VOICES, KokoroClient } from "../tts/kokoro.ts";
 import { renderBoard } from "./board.ts";
+import { exportMp3, mp3FileName } from "./export.ts";
 import { Player, type PlayerState } from "./player.ts";
+import { KokoroSpeaker, SystemSpeaker } from "./speakers.ts";
 import { SAMPLE_PGN } from "./samples.ts";
 import { loadSettings, saveSettings, type Settings } from "./settings.ts";
 
@@ -30,6 +33,16 @@ const ui = {
 	moves: $<HTMLOListElement>("moves"),
 	settings: $<HTMLFormElement>("settings"),
 	voice: $<HTMLSelectElement>("voice"),
+	engine: $<HTMLSelectElement>("engine"),
+	systemVoiceRow: $<HTMLDivElement>("system-voice-row"),
+	kokoroVoiceRow: $<HTMLDivElement>("kokoro-voice-row"),
+	kokoroVoice: $<HTMLSelectElement>("kokoro-voice"),
+	kokoroStatus: $<HTMLParagraphElement>("kokoro-status"),
+	kokoroProgress: $<HTMLProgressElement>("kokoro-progress"),
+	mp3: $<HTMLButtonElement>("mp3"),
+	mp3Cancel: $<HTMLButtonElement>("mp3-cancel"),
+	mp3Progress: $<HTMLProgressElement>("mp3-progress"),
+	mp3Status: $<HTMLParagraphElement>("mp3-status"),
 };
 
 let settings: Settings = loadSettings();
@@ -39,7 +52,14 @@ let cues: Cue[] = [];
 let shownPly = 0;
 
 const supported = "speechSynthesis" in window;
-const player = new Player(playerOptions(), onPlayerChange);
+const kokoroSupported = KokoroClient.supported;
+if (!kokoroSupported && settings.engine === "kokoro") settings = { ...settings, engine: "system" };
+
+const kokoro = new KokoroClient();
+const systemSpeaker = new SystemSpeaker(() => ({ voice: systemVoice(), rate: settings.rate }));
+const kokoroSpeaker = new KokoroSpeaker(kokoro, () => ({ voice: settings.kokoroVoice, speed: settings.rate }));
+const player = new Player(playerOptions(), onPlayerChange, (err) => showMessage(`Speech stopped: ${err.message}`, true));
+let exporting: AbortController | null = null;
 
 // ---------- Loading games ----------
 
@@ -126,11 +146,12 @@ function onPlayerChange(cue: Cue | null, _index: number, state: PlayerState) {
 }
 
 function updateControls(state: PlayerState) {
-	const has = cues.length > 0 && supported;
+	const has = cues.length > 0 && (settings.engine === "kokoro" ? kokoroSupported : supported);
 	for (const b of [ui.restart, ui.prev, ui.play, ui.next, ui.repeat]) b.disabled = !has;
 	const playing = state === "playing";
 	ui.play.textContent = playing ? "⏸" : "▶";
 	ui.play.setAttribute("aria-label", playing ? "Pause" : state === "waiting" ? "Next move" : "Play");
+	ui.mp3.disabled = cues.length === 0 || !kokoroSupported || exporting !== null;
 }
 
 function showPly(ply: number) {
@@ -175,9 +196,13 @@ function applyReveal() {
 
 // ---------- Settings ----------
 
+function systemVoice(): SpeechSynthesisVoice | null {
+	return supported ? speechSynthesis.getVoices().find((v) => v.voiceURI === settings.voiceURI) ?? null : null;
+}
+
 function playerOptions() {
-	const voice = supported ? speechSynthesis.getVoices().find((v) => v.voiceURI === settings.voiceURI) ?? null : null;
-	return { voice, rate: settings.rate, waitBetweenMoves: settings.waitBetweenMoves };
+	const speaker = settings.engine === "kokoro" ? kokoroSpeaker : systemSpeaker;
+	return { speaker, waitBetweenMoves: settings.waitBetweenMoves };
 }
 
 function fillSettingsForm() {
@@ -217,8 +242,12 @@ function readSettingsForm(target: HTMLInputElement | HTMLSelectElement) {
 	updateOutputs();
 
 	const viewOnly: (keyof Settings)[] = ["showMoves", "showBoard", "flipBoard"];
-	const playerOnly: (keyof Settings)[] = ["rate", "voiceURI", "waitBetweenMoves"];
-	if (viewOnly.includes(key)) applyReveal();
+	const playerOnly: (keyof Settings)[] = ["rate", "voiceURI", "kokoroVoice", "waitBetweenMoves"];
+	if (key === "engine") {
+		applyEngine();
+		player.setOptions(playerOptions());
+		updateControls(player.playing ? "playing" : "paused");
+	} else if (viewOnly.includes(key)) applyReveal();
 	else if (playerOnly.includes(key)) player.setOptions(playerOptions());
 	else if (game) {
 		// Script changes take effect from the current move.
@@ -232,25 +261,129 @@ function fillVoices() {
 	if (!supported) return;
 	const voices = speechSynthesis.getVoices();
 	const lang = navigator.language.slice(0, 2);
-	const sorted = [...voices].sort((a, b) => {
-		const rank = (v: SpeechSynthesisVoice) => (v.lang.startsWith(lang) ? 0 : v.lang.startsWith("en") ? 1 : 2);
-		return rank(a) - rank(b) || a.name.localeCompare(b.name);
-	});
+	const langRank = (v: SpeechSynthesisVoice) => (v.lang.startsWith(lang) ? 0 : v.lang.startsWith("en") ? 1 : 2);
+	const sorted = [...voices].sort(
+		(a, b) => langRank(a) - langRank(b) || voiceQuality(b) - voiceQuality(a) || a.name.localeCompare(b.name),
+	);
+	const option = (v: SpeechSynthesisVoice) => {
+		const o = document.createElement("option");
+		o.value = v.voiceURI;
+		o.textContent = `${v.name} (${v.lang})`;
+		return o;
+	};
+	const group = (label: string, list: SpeechSynthesisVoice[]) => {
+		const g = document.createElement("optgroup");
+		g.label = label;
+		g.append(...list.map(option));
+		return g;
+	};
 	const def = document.createElement("option");
 	def.value = "";
 	def.textContent = "Default voice";
-	ui.voice.replaceChildren(
-		def,
-		...sorted.map((v) => {
-			const o = document.createElement("option");
-			o.value = v.voiceURI;
-			o.textContent = `${v.name} (${v.lang})`;
-			return o;
-		}),
-	);
+	const best = sorted.filter((v) => voiceQuality(v) > 0 && langRank(v) < 2);
+	const rest = sorted.filter((v) => !best.includes(v));
+	ui.voice.replaceChildren(def, ...(best.length ? [group("Best on this device", best)] : []), group("Other voices", rest));
 	ui.voice.value = settings.voiceURI;
 	if (ui.voice.value !== settings.voiceURI) ui.voice.value = "";
 	player.setOptions(playerOptions());
+}
+
+/** Higher for the natural-sounding voices browsers and systems offer. */
+function voiceQuality(v: SpeechSynthesisVoice): number {
+	const n = v.name;
+	if (/premium/i.test(n)) return 4;
+	if (/enhanced|natural|neural/i.test(n)) return 3;
+	if (/online|google/i.test(n)) return 2;
+	return 0;
+}
+
+// ---------- High-quality voice and MP3 ----------
+
+function fillKokoroVoices() {
+	ui.kokoroVoice.replaceChildren(
+		...KOKORO_VOICES.map((v) => {
+			const o = document.createElement("option");
+			o.value = v.id;
+			o.textContent = v.label;
+			return o;
+		}),
+	);
+	ui.kokoroVoice.value = settings.kokoroVoice;
+}
+
+function applyEngine() {
+	const hq = settings.engine === "kokoro";
+	ui.systemVoiceRow.hidden = hq;
+	ui.kokoroVoiceRow.hidden = !hq;
+	if (hq) void loadKokoro();
+}
+
+function megabytes(n: number) {
+	return `${Math.round(n / 1e6)} MB`;
+}
+
+async function loadKokoro() {
+	if (kokoro.loaded) {
+		ui.kokoroStatus.textContent = "High-quality voice ready.";
+		return;
+	}
+	ui.kokoroProgress.hidden = false;
+	ui.kokoroStatus.textContent = "Getting the voice ready…";
+	const off = kokoro.onProgress((loaded, total) => {
+		ui.kokoroProgress.value = total ? loaded / total : 0;
+		ui.kokoroStatus.textContent = total ? `Downloading the voice: ${megabytes(loaded)} of ${megabytes(total)}…` : "Downloading the voice…";
+	});
+	try {
+		await kokoro.load();
+		ui.kokoroStatus.textContent = "High-quality voice ready.";
+	} catch (e) {
+		ui.kokoroStatus.textContent = `Couldn't load the voice (${(e as Error).message}). Check your connection and pick it again.`;
+	} finally {
+		off();
+		ui.kokoroProgress.hidden = true;
+	}
+}
+
+async function downloadMp3() {
+	if (!game || cues.length === 0 || exporting) return;
+	player.pause();
+	exporting = new AbortController();
+	updateControls("paused");
+	ui.mp3Cancel.hidden = false;
+	ui.mp3Progress.hidden = false;
+	ui.mp3Progress.value = 0;
+	const labels = { voice: "Getting the voice ready", speaking: "Speaking the moves", encoding: "Making the MP3" };
+	try {
+		const blob = await exportMp3(
+			// Script without "wait for me" stops: a file plays straight through.
+			cues,
+			kokoro,
+			settings.kokoroVoice,
+			settings.rate,
+			(p) => {
+				ui.mp3Progress.value = p.fraction;
+				ui.mp3Status.textContent = `${labels[p.stage]}… ${Math.round(p.fraction * 100)}%`;
+			},
+			exporting.signal,
+		);
+		const url = URL.createObjectURL(blob);
+		const a = document.createElement("a");
+		a.href = url;
+		a.download = mp3FileName(game.headers);
+		document.body.append(a);
+		a.click();
+		a.remove();
+		setTimeout(() => URL.revokeObjectURL(url), 60_000);
+		ui.mp3Status.textContent = `Saved ${a.download} (${(blob.size / 1e6).toFixed(1)} MB).`;
+	} catch (e) {
+		ui.mp3Status.textContent =
+			(e as Error).name === "AbortError" ? "Cancelled." : `Couldn't make the MP3: ${(e as Error).message}`;
+	} finally {
+		exporting = null;
+		ui.mp3Cancel.hidden = true;
+		ui.mp3Progress.hidden = true;
+		updateControls("paused");
+	}
 }
 
 // ---------- Wiring ----------
@@ -279,6 +412,11 @@ ui.next.addEventListener("click", () => player.next());
 ui.prev.addEventListener("click", () => player.previous());
 ui.repeat.addEventListener("click", () => player.repeat());
 ui.restart.addEventListener("click", () => player.restart());
+ui.mp3.addEventListener("click", () => void downloadMp3());
+ui.mp3Cancel.addEventListener("click", () => {
+	exporting?.abort();
+	kokoro.cancelPending();
+});
 
 ui.settings.addEventListener("input", (e) => readSettingsForm(e.target as HTMLInputElement));
 ui.settings.addEventListener("submit", (e) => e.preventDefault());
@@ -323,8 +461,14 @@ document.addEventListener("drop", async (e) => {
 	}
 });
 
+fillKokoroVoices();
 fillSettingsForm();
 updateControls("stopped");
+if (!kokoroSupported) {
+	ui.engine.querySelector<HTMLOptionElement>('option[value="kokoro"]')!.disabled = true;
+	ui.mp3Status.textContent = "The high-quality voice and MP3 download work on the website, not when this page is opened as a file.";
+}
+applyEngine();
 if (supported) {
 	fillVoices();
 	speechSynthesis.addEventListener("voiceschanged", fillVoices);

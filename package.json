@@ -12,7 +12,9 @@
 	"author": "Damian Evans",
 	"license": "MIT",
 	"dependencies": {
-		"chess.js": "^1.4.0"
+		"@breezystack/lamejs": "^1.2.7",
+		"chess.js": "^1.4.0",
+		"kokoro-js": "^1.2.1"
 	},
 	"devDependencies": {
 		"@types/node": "^24.12.0",

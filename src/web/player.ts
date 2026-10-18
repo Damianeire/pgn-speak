@@ -1,14 +1,17 @@
-// Speaks cues one by one with the browser's speech engine, waiting each cue's
-// pause in between. Pausing and resuming restarts the current cue.
+// Speaks cues one by one through a Speaker, waiting each cue's pause in
+// between. Pausing and resuming restarts the current cue.
 
 import type { Cue } from "../core/script.ts";
+import type { Speaker } from "./speakers.ts";
 
 export interface PlayerOptions {
-	voice: SpeechSynthesisVoice | null;
-	rate: number;
+	speaker: Speaker;
 	/** Stop after each move (and its note) until the user asks for the next one. */
 	waitBetweenMoves: boolean;
 }
+
+/** How many upcoming cues to get ready while the current one plays. */
+const PREFETCH = 6;
 
 export type PlayerState = "stopped" | "playing" | "paused" | "waiting" | "ended";
 
@@ -18,22 +21,30 @@ export class Player {
 	private state: PlayerState = "stopped";
 	private run = 0;
 	private timer: number | undefined;
-	// Chrome can drop events for utterances that get garbage-collected mid-speech.
-	private utterance: SpeechSynthesisUtterance | null = null;
 
 	constructor(
 		private options: PlayerOptions,
 		private onChange: (cue: Cue | null, index: number, state: PlayerState) => void,
+		private onError: (err: Error) => void = () => {},
 	) {}
 
 	load(cues: Cue[]) {
-		this.halt();
+		this.halt(true);
 		this.cues = cues;
 		this.index = 0;
 		this.setState("stopped");
 	}
 
 	setOptions(options: PlayerOptions) {
+		if (options.speaker !== this.options.speaker) {
+			// Switching voices mid-phrase: stop the old one and pick up from the same cue.
+			const wasPlaying = this.state === "playing";
+			this.halt(true);
+			this.options = options;
+			if (wasPlaying) this.speakFrom(this.index);
+			else this.setState(this.state);
+			return;
+		}
 		this.options = options;
 	}
 
@@ -55,7 +66,7 @@ export class Player {
 
 	pause() {
 		if (this.state !== "playing") return;
-		this.halt();
+		this.halt(true);
 		this.setState("paused");
 	}
 
@@ -84,7 +95,7 @@ export class Player {
 
 	/** Move to the start of a ply without speaking (used after settings change). */
 	seekPly(ply: number) {
-		this.halt();
+		this.halt(true);
 		const i = this.cues.findIndex((c) => c.ply >= ply);
 		this.index = i === -1 ? 0 : i;
 		this.setState(ply > 0 ? "paused" : "stopped");
@@ -95,14 +106,14 @@ export class Player {
 	}
 
 	stop() {
-		this.halt();
+		this.halt(true);
 		this.index = 0;
 		this.setState("stopped");
 	}
 
 	private jump(target: number) {
 		const resume = this.state === "playing" || this.state === "waiting";
-		this.halt();
+		this.halt(true);
 		this.index = Math.max(0, target);
 		if (resume) this.speakFrom(this.index);
 		else this.setState(this.state === "ended" ? "paused" : this.state);
@@ -128,12 +139,8 @@ export class Player {
 		}
 		this.setState("playing");
 
-		const u = new SpeechSynthesisUtterance(cue.speech);
-		if (this.options.voice) {
-			u.voice = this.options.voice;
-			u.lang = this.options.voice.lang;
-		}
-		u.rate = this.options.rate;
+		const speaker = this.options.speaker;
+		speaker.prefetch?.(this.cues.slice(index + 1, index + 1 + PREFETCH).map((c) => c.speech));
 		const done = () => {
 			if (run !== this.run) return;
 			const nextCue = this.cues[index + 1];
@@ -151,21 +158,24 @@ export class Player {
 				if (run === this.run) this.speakFrom(index + 1);
 			}, cue.pauseAfterMs);
 		};
-		u.onend = done;
-		u.onerror = (e) => {
-			// "interrupted"/"canceled" come from our own cancel(); anything else, skip on.
-			if (e.error !== "interrupted" && e.error !== "canceled") done();
-		};
-		this.utterance = u;
-		speechSynthesis.speak(u);
+		speaker.speak(cue.speech).then(done, (err: Error) => {
+			if (run !== this.run) return;
+			this.halt(true);
+			this.setState("paused");
+			this.onError(err);
+		});
 	}
 
-	/** Cancel speech and timers; invalidates callbacks from the old run. */
-	private halt() {
+	/**
+	 * Cancel speech and timers; invalidates callbacks from the old run. `leaving`
+	 * means playback won't simply carry on to the next cue, so phrases prepared
+	 * ahead can be dropped.
+	 */
+	private halt(leaving = false) {
 		this.run++;
 		window.clearTimeout(this.timer);
-		this.utterance = null;
-		speechSynthesis.cancel();
+		this.options.speaker.stop();
+		if (leaving) this.options.speaker.reset?.();
 	}
 
 	private setState(state: PlayerState) {

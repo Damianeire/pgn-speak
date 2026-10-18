@@ -47,6 +47,12 @@
 				<button id="repeat" title="Repeat move (R)" aria-label="Repeat move">↻</button>
 			</div>
 			<p class="hint">Keys: space to play or pause, ← → to change move, R to repeat.</p>
+			<div class="export" role="group" aria-label="Download">
+				<button id="mp3">Download MP3</button>
+				<button id="mp3-cancel" hidden>Cancel</button>
+				<progress id="mp3-progress" max="1" value="0" hidden></progress>
+				<p id="mp3-status" class="note" aria-live="polite">Uses the high-quality voice and your pause settings.</p>
+			</div>
 			<div id="board" class="board" hidden></div>
 			<ol id="moves" class="moves" hidden></ol>
 		</section>
@@ -67,7 +73,20 @@
 
 				<fieldset>
 					<legend>Speech</legend>
-					<label>Voice <select name="voiceURI" id="voice"></select></label>
+					<label>Voice type
+						<select name="engine" id="engine">
+							<option value="system">This device's voices</option>
+							<option value="kokoro">High-quality voice (downloads about 90 MB once)</option>
+						</select></label>
+					<div id="system-voice-row" class="sub">
+						<label>Voice <select name="voiceURI" id="voice"></select></label>
+						<p class="note">Better device voices: on a Mac, open System Settings → Accessibility → Spoken Content → System voice → Manage Voices and download an "Enhanced" or "Premium" voice (Safari lists them all). Microsoft Edge has free "Natural" voices.</p>
+					</div>
+					<div id="kokoro-voice-row" class="sub" hidden>
+						<label>Voice <select name="kokoroVoice" id="kokoro-voice"></select></label>
+						<p class="note" id="kokoro-status" aria-live="polite">Runs on your device; nothing is uploaded. The voice is downloaded from Hugging Face the first time and kept by your browser.</p>
+						<progress id="kokoro-progress" max="1" value="0" hidden></progress>
+					</div>
 					<label>Pawn moves
 						<select name="pawns">
 							<option value="pawn-to">"Pawn to e4"</option>
@@ -115,7 +134,7 @@
 	</main>
 
 	<footer class="foot">
-		<p>Speech uses your device's own voices. Nothing is uploaded.</p>
+		<p>Speech runs on your device: its own voices, or the Kokoro voice model running in this page. Nothing you load is uploaded. <a href="https://github.com/Damianeire/pgn-speak">Source and licences</a>.</p>
 	</footer>
 
 	<script defer src="app.js"></script>

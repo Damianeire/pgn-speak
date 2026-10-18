@@ -1,8 +1,13 @@
 import { DEFAULT_SCRIPT_SETTINGS, type ScriptSettings } from "../core/script.ts";
 
+export type Engine = "system" | "kokoro";
+
 export interface Settings extends ScriptSettings {
 	rate: number;
+	/** "system" = the device's voices; "kokoro" = the downloadable high-quality voice. */
+	engine: Engine;
 	voiceURI: string;
+	kokoroVoice: string;
 	waitBetweenMoves: boolean;
 	showMoves: boolean;
 	showBoard: boolean;
@@ -12,7 +17,9 @@ export interface Settings extends ScriptSettings {
 export const DEFAULTS: Settings = {
 	...DEFAULT_SCRIPT_SETTINGS,
 	rate: 0.9,
+	engine: "system",
 	voiceURI: "",
+	kokoroVoice: "af_heart",
 	waitBetweenMoves: false,
 	showMoves: false,
 	showBoard: false,
