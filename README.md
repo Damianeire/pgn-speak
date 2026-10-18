@@ -31,3 +31,7 @@ npm run build   # type-check and write site/app.js
   - `speech.ts` turns one SAN move into words
   - `script.ts` builds the list of spoken cues and their pauses
 - `src/web/` — the page: player (Web Speech API), board, settings, wiring
+
+## Credits
+
+Moves are checked with [chess.js](https://github.com/jhlywa/chess.js) (BSD-2-Clause). The board uses Cburnett's chess pieces from [Wikimedia Commons](https://commons.wikimedia.org/wiki/Category:SVG_chess_pieces), under their BSD-3-Clause option. The full notices are in [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md), and the built `site/app.js` carries them too.

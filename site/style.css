@@ -9,8 +9,6 @@
 	--sq-light: #ece3cf;
 	--sq-dark: #a88a65;
 	--sq-last: rgba(214, 180, 60, 0.55);
-	--piece-white: #fbfaf7;
-	--piece-black: #1d1b18;
 	--error: #a3352b;
 	color-scheme: light;
 }
@@ -121,9 +119,7 @@ button:disabled { opacity: 0.45; cursor: default; }
 .sq.light { background: var(--sq-light); }
 .sq.dark { background: var(--sq-dark); }
 .sq.last::after { content: ""; position: absolute; inset: 0; background: var(--sq-last); }
-.piece { position: relative; z-index: 1; font-size: clamp(22px, 7vw, 36px); line-height: 1; }
-.piece.white { color: var(--piece-white); -webkit-text-stroke: 1px #2a2620; }
-.piece.black { color: var(--piece-black); }
+.piece { position: relative; z-index: 1; width: 90%; height: 90%; pointer-events: none; }
 
 .moves {
 	display: grid;

@@ -1,8 +1,14 @@
 import * as esbuild from "esbuild";
+import { readFileSync } from "node:fs";
+
+// chess.js is bundled into app.js, so its licence notice has to travel with it.
+// (The chess pieces' notice is a /*! comment in src/web/pieces.ts, which esbuild keeps.)
+const chessLicence = readFileSync("node_modules/chess.js/LICENSE", "utf8").trim().replace(/\*\//g, "* /");
 
 const serve = process.argv[2] === "serve";
 
 const options = {
+	banner: { js: `/*\nPGN Speak includes chess.js (https://github.com/jhlywa/chess.js), under this licence:\n\n${chessLicence}\n*/` },
 	entryPoints: ["src/web/main.ts"],
 	bundle: true,
 	format: "iife",
