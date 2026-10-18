@@ -5,7 +5,7 @@ const serve = process.argv[2] === "serve";
 const options = {
 	entryPoints: ["src/web/main.ts"],
 	bundle: true,
-	format: "esm",
+	format: "iife",
 	target: "es2020",
 	outfile: "site/app.js",
 	sourcemap: serve ? "inline" : false,
