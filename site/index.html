@@ -1,0 +1,123 @@
+<!doctype html>
+<html lang="en">
+<head>
+	<meta charset="utf-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1">
+	<title>PGN Speak</title>
+	<meta name="description" content="Hear a chess game read aloud, move by move, for blindfold practice. Everything runs in your browser.">
+	<link rel="stylesheet" href="style.css">
+</head>
+<body>
+	<header class="top">
+		<h1>PGN Speak</h1>
+		<p class="lede">Hear a chess game read aloud, move by move. Your games never leave this page.</p>
+	</header>
+
+	<main>
+		<section class="card" id="input-card" aria-labelledby="input-h">
+			<h2 id="input-h">Game</h2>
+			<textarea id="pgn" spellcheck="false" placeholder="Paste a PGN here, drop a .pgn file on the page, or load a Lichess game below."></textarea>
+			<div class="row wrap">
+				<button id="load" class="primary">Load game</button>
+				<label class="button" for="file">Open .pgn file</label>
+				<input type="file" id="file" accept=".pgn,.txt,application/x-chess-pgn" hidden>
+				<button id="sample">Try a sample</button>
+			</div>
+			<form id="lichess-form" class="row">
+				<input type="url" id="lichess-url" placeholder="Lichess game link, e.g. https://lichess.org/abcd1234" aria-label="Lichess game link">
+				<button type="submit">Fetch</button>
+			</form>
+			<p id="message" class="message" role="status" aria-live="polite"></p>
+			<div id="game-pick" class="row" hidden>
+				<label for="game-select">Game in file</label>
+				<select id="game-select"></select>
+			</div>
+		</section>
+
+		<section class="card" id="player-card" aria-labelledby="player-h">
+			<h2 id="player-h" class="sr-only">Player</h2>
+			<p id="title" class="game-title">No game loaded</p>
+			<p id="position" class="position" aria-live="off">—</p>
+			<p id="caption" class="caption" aria-live="off"></p>
+			<div class="controls" role="group" aria-label="Playback">
+				<button id="restart" title="Start again" aria-label="Start again">⏮</button>
+				<button id="prev" title="Previous move (←)" aria-label="Previous move">◀</button>
+				<button id="play" class="primary big" title="Play / pause (space)" aria-label="Play">▶</button>
+				<button id="next" title="Next move (→)" aria-label="Next move">▶▶</button>
+				<button id="repeat" title="Repeat move (R)" aria-label="Repeat move">↻</button>
+			</div>
+			<p class="hint">Keys: space to play or pause, ← → to change move, R to repeat.</p>
+			<div id="board" class="board" hidden></div>
+			<ol id="moves" class="moves" hidden></ol>
+		</section>
+
+		<section class="card" aria-labelledby="settings-h">
+			<h2 id="settings-h">Settings</h2>
+			<form id="settings" class="settings">
+				<fieldset>
+					<legend>Timing</legend>
+					<label>Pause between moves <output data-for="pauseBetweenMovesMs"></output>
+						<input type="range" name="pauseBetweenMovesMs" min="0" max="20000" step="500"></label>
+					<label>Pause after the move number and colour <output data-for="pauseAfterColourMs"></output>
+						<input type="range" name="pauseAfterColourMs" min="0" max="3000" step="100"></label>
+					<label>Speaking speed <output data-for="rate"></output>
+						<input type="range" name="rate" min="0.5" max="1.5" step="0.05"></label>
+					<label class="check"><input type="checkbox" name="waitBetweenMoves"> Wait for me after each move (press → or space)</label>
+				</fieldset>
+
+				<fieldset>
+					<legend>Speech</legend>
+					<label>Voice <select name="voiceURI" id="voice"></select></label>
+					<label>Pawn moves
+						<select name="pawns">
+							<option value="pawn-to">"Pawn to e4"</option>
+							<option value="square">"e4"</option>
+						</select></label>
+					<label>Square letters
+						<select name="letters">
+							<option value="letters">Letters (e4)</option>
+							<option value="spelled">Spelled out (ee 4)</option>
+							<option value="nato">Phonetic (echo 4)</option>
+						</select></label>
+					<label class="check"><input type="checkbox" name="squareComma"> Short pause between letter and number</label>
+					<label class="check"><input type="checkbox" name="sayIntro"> Say players, event and date first</label>
+					<label class="check"><input type="checkbox" name="sayMoveNumbers"> Say move numbers</label>
+					<label class="check"><input type="checkbox" name="sayColour"> Say "White" / "Black"</label>
+				</fieldset>
+
+				<fieldset>
+					<legend>Annotations</legend>
+					<label>Point out
+						<select name="annotations">
+							<option value="off">Nothing (main line only)</option>
+							<option value="blunders">Blunders (??)</option>
+							<option value="mistakes">Blunders and mistakes (?)</option>
+							<option value="inaccuracies">Also inaccuracies (?!)</option>
+						</select></label>
+					<label>Better line to read
+						<select name="alternativeLength">
+							<option value="0">Don't read it</option>
+							<option value="1">1 move</option>
+							<option value="2">2 moves</option>
+							<option value="3">3 moves</option>
+						</select></label>
+					<p class="note">Uses the ?, ?? and ?! marks and the first variation after them. Lichess "Download annotated" PGNs work well.</p>
+				</fieldset>
+
+				<fieldset>
+					<legend>Check your visualisation</legend>
+					<label class="check"><input type="checkbox" name="showMoves"> Show moves as text</label>
+					<label class="check"><input type="checkbox" name="showBoard"> Show board</label>
+					<label class="check"><input type="checkbox" name="flipBoard"> Black at the bottom</label>
+				</fieldset>
+			</form>
+		</section>
+	</main>
+
+	<footer class="foot">
+		<p>Speech uses your device's own voices. Nothing is uploaded.</p>
+	</footer>
+
+	<script type="module" src="app.js"></script>
+</body>
+</html>
